@@ -1,0 +1,9 @@
+Changes
+lib/Crypt/CipherSaber.pm
+Makefile.PL
+MANIFEST
+README
+t/CS2.t
+t/both_long.t
+t/encrypt.t
+t/create.t
