@@ -1,8 +1,8 @@
 Crypt::CipherSaber
 ------------------
 
-version 0.50
-released 2 December 2000
+version 0.60
+released 7 April 2001
 
 Crypt::CipherSaber is a Perl module providing an object oriented interface to
 CipherSaber-1 and CipherSaber-2 encryption.  See the POD for further details on
@@ -20,14 +20,15 @@ shared secret system, and is suitable even for binary files.  It should run
 without modification anywhere Perl runs.
 
 Prerequisites:				none
-Recent changes:				none
+Recent changes:				
+	- works on Perl 5.004 and later (0.60)
+	- supports filehandle-to-filehandle encryption and decryption (0.60)
 
 Enhancements/plans:			
 
  * built-in support for a better randomization scheme?
- * support to read data from a filehandle?
  * support changing keys in an object rather than creating a new one?
 
-copyright (c) 2000 chromatic (chromatic@wgz.org), all rights reserved.
+copyright (c) 2001 chromatic (chromatic@wgz.org), all rights reserved.
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.

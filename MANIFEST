@@ -4,6 +4,10 @@ Makefile.PL
 MANIFEST
 README
 t/CS2.t
+t/bigfile.t
 t/both_long.t
-t/encrypt.t
 t/create.t
+t/encrypt.t
+t/fh_encrypt.t
+t/smiles.cs1
+t/smiles.png

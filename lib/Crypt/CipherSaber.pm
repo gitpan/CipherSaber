@@ -4,7 +4,7 @@
 #		an object oriented module implementing CipherSaber-1 and CS-2
 #		encryption
 #
-#	copyright (c) 2000 chromatic.  All rights reserved.
+#	copyright (c) 2001 chromatic.  All rights reserved.
 #	This program is free software; you can distribute and modify it under the
 #	same terms as Perl itself.
 ################################################################################
@@ -12,9 +12,10 @@
 package Crypt::CipherSaber;
 
 use strict;
+use Carp;
 use vars qw($VERSION);
 
-$VERSION = '0.50';
+$VERSION = '0.60';
 
 sub new {
 	my $class = shift;
@@ -35,18 +36,7 @@ sub crypt {
 	$self->_setup_key($iv);
 	my $message = shift;
 	my $state = $self->[1];
-	my ($i, $j, $n) = (0, 0, 0);
-	my $output;
-	for (0 .. (length($message) -1 )) {
-		$i++;
-		$i %= 256;
-		$j += $state->[$i];
-		$j %= 256;
-		@$state[$i, $j] = @$state[$j, $i];
-		$n = $state->[$i] + $state->[$j];
-		$n %= 256;
-		$output .= chr( $state->[$n] ^ ord(substr($message, $_, 1)) );
-	}
+	my $output = _do_crypt($state, $message);
 	$self->[1] = [ 0 .. 255 ];
 	return $output;
 }
@@ -59,9 +49,43 @@ sub encrypt {
 
 sub decrypt {
 	my $self = shift;
-	my $message = shift;
-	my $iv = substr($message, 0, 10, '');
+	my ($iv, $message) = unpack("a10a*", +shift);
 	return $self->crypt($iv, $message);
+}
+
+sub fh_crypt {
+	my $self = shift;
+	my ($in, $out, $iv) = @_;
+
+	unless(UNIVERSAL::isa($in, 'GLOB') and UNIVERSAL::isa($out, 'GLOB')) {
+		carp "I need filehandles!";
+		return;
+	}
+
+	local *OUT = $out;
+	if (defined($iv)) {
+		unless (length($iv) > 1) {
+			$iv = $self->_gen_iv();
+		}
+		$self->_setup_key($iv);
+		print OUT $iv;
+	}
+
+	my $state = $self->[1];
+
+	my ($buf, @vars);
+
+	while (<$in>) {
+		unless ($iv) {
+			($iv, $_) = unpack("a10a*", $_);
+			$self->_setup_key($iv);
+		}
+		my $line;
+		($line, $state, @vars) = _do_crypt($state, $_, @vars);
+		print OUT $line;
+	}
+	$self->[1] = [ 0 .. 255 ];
+	return 1;
 }
 
 ###################
@@ -71,7 +95,9 @@ sub decrypt {
 ###################
 sub _gen_iv {
 	my $iv;
-	$iv .= chr(int(rand(255))) for (1 .. 10);
+	for (1 .. 10) {
+		$iv .= chr(int(rand(255)));
+	}
 	return $iv;
 }
 
@@ -93,6 +119,25 @@ sub _setup_key {
 	}
 }
 
+sub _do_crypt {
+	my ($state, $message, $i, $j, $n) = @_;
+
+	my $output;
+
+	for (0 .. (length($message) - 1 )) {
+		$i++;
+		$i %= 256;
+		$j += $state->[$i];
+		$j %= 256;
+		@$state[$i, $j] = @$state[$j, $i];
+		$n = $state->[$i] + $state->[$j];
+		$n %= 256;
+		$output .= chr( $state->[$n] ^ ord(substr($message, $_, 1)) );
+	}
+
+	return wantarray ? ($output, $state, $i, $j, $n) : $output;
+}
+
 1;
 
 __END__
@@ -109,6 +154,20 @@ Crypt::CipherSaber - Perl module implementing CipherSaber encryption.
   my $coded = $cs->encrypt('Here is a secret message for you');
   my $decoded = $cs->decrypt($coded);
 
+  # encrypt from and to a file
+  open(INFILE, 'secretletter.txt') or die "Can't open infile: $!";
+  open(OUTFILE, '>secretletter.cs1') or die "Can't open outfile: $!";
+  binmode(INFILE);
+  binmode(OUTFILE);
+  $cs->fh_crypt(\*INFILE, \*OUTFILE, 1);
+
+  # decrypt from and to a file
+  open(INFILE, 'secretletter.cs1') or die "Can't open infile: $!";
+  open(OUTFILE, '>secretletter.txt') or die "Can't open outfile: $!";
+  binmode(INFILE);
+  binmode(OUTFILE);
+  $cs->fh_crypt(\*INFILE, \*OUTFILE);
+
 =head1 DESCRIPTION
 
 The Crypt::CipherSaber module implements CipherSaber encryption, described at
@@ -119,6 +178,8 @@ Encryption and decryption are done based on a secret key, which must be shared
 with all intended recipients of a message.
 
 =head1 METHODS
+
+=over
 
 =item B<new($key, $N)>
 
@@ -162,11 +223,32 @@ the encryption tends to be.  On some operating systems, you can read from
 /dev/random.  Other approaches are the Math::TrulyRandom module, or compressing
 a file, removing the headers, and compressing it again.
 
+=item B<fh_crypt(\*INPUT, \*OUTPUT, ($iv))>
+
+For the sake of efficiency, Crypt::CipherSaber can now operate on filehandles.
+It's not super brilliant, but it's relatively fast and sane.  Pass in a
+reference to the input file handle and the output filehandle.  If your platform
+needs to use C<binmode()>, this is your responsibility.  It is also your
+responsibility to close the files.
+
+You may also pass in an optional third parameter, an IV.  There are three
+possibilities here.  If you pass no IV, C<fh_crypt()> will pull the first ten
+bytes from *INPUT and use that as an IV.  This corresponds to decryption.  If 
+you pass in an IV of your own (generally ten digits, but more than one digits 
+as the code is now), it will use your own IV when encrypting the file.  If you
+pass in the value '1', it will generate a new, random IV for you.  This
+corresponds to an encryption.
+
+=back
+
 =head1 AUTHOR
 
 chromatic <chromatic@wgz.org>
 
 thanks to jlp for testing, moral support, and never fearing the icky details and to the fine folks at http://perlmonks.org
+
+Additional thanks to Olivier Salaun and the Sympa project (http://www.sympa.org)
+for testing.
 
 =head1 SEE ALSO
 
